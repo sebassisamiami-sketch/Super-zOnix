@@ -1,0 +1,57 @@
+# zOnix — audio control/mixing/enhancement suite for Linux Nobara.
+# Cargo workspace: the backend core, always-on daemon, and CLI client live here.
+# The Tauri GUI (gui/) has its own crate and is wired in during Phase 4.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/zonix-core",
+    "crates/zonix-daemon",
+    "crates/zonix-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "GPL-3.0-or-later"
+authors = ["zOnix contributors"]
+repository = "https://github.com/sebassisamiami-sketch/Super-zOnix"
+description = "Native audio control, mixing and enhancement suite for Linux (PipeWire)"
+
+[workspace.dependencies]
+# Shared crate
+zonix-core = { path = "crates/zonix-core" }
+
+# Serialization / IPC contract
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime (daemon)
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "io-util",
+    "signal",
+    "sync",
+    "time",
+    "fs",
+] }
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+
+# Errors & logging
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Config / directories
+directories = "5"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

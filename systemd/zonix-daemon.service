@@ -1,0 +1,30 @@
+# zOnix audio engine — systemd *user* service.
+#
+# Install (per-user, no root):
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/zonix-daemon.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now zonix-daemon.service
+#
+# It is ordered after the PipeWire user services so the graph exists before
+# zonixd tries to create its virtual sinks.
+
+[Unit]
+Description=zOnix audio engine daemon
+Documentation=https://github.com/sebassisamiami-sketch/Super-zOnix
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# %h expands to the user's home directory.
+ExecStart=%h/.local/bin/zonixd
+Restart=on-failure
+RestartSec=2
+# Keep the daemon lightweight and predictable.
+Nice=-5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target

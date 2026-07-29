@@ -1,0 +1,19 @@
+[package]
+name = "zonix-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "zonixctl — command-line client for the zOnix daemon"
+
+[[bin]]
+name = "zonixctl"
+path = "src/main.rs"
+
+[dependencies]
+zonix-core = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }

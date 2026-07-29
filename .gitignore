@@ -1,0 +1,21 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.orig
+
+# Tauri / Node (GUI, added in Phase 4)
+gui/node_modules/
+gui/dist/
+gui/src-tauri/target/
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Packaging build artifacts
+packaging/rpm/build/
+packaging/flatpak/.flatpak-builder/
+packaging/flatpak/build/
