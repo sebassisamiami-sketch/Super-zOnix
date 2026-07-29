@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast, Mutex};
 use zonix_core::{
-    model::{ChannelRole, Equalizer, MicSettings, SpatialSettings, SystemState},
+    model::{AppStream, ChannelRole, Equalizer, MicSettings, SpatialSettings, SystemState},
     protocol::Event,
 };
 
@@ -104,5 +104,38 @@ impl SharedState {
     pub async fn set_pipewire_connected(&self, connected: bool) {
         self.inner.lock().await.pipewire_connected = connected;
         self.emit(Event::PipeWireStatus { connected });
+    }
+
+    /// Record a lane sink's live PipeWire node id (from a `SinkReady` update).
+    pub async fn set_sink_node_id(&self, role: ChannelRole, node_id: u32) {
+        {
+            let mut st = self.inner.lock().await;
+            if let Some(sink) = st.sinks.iter_mut().find(|s| s.role == role) {
+                sink.node_id = Some(node_id);
+            }
+        }
+        self.emit_state_changed().await;
+    }
+
+    /// Add (or replace) an application stream and notify clients.
+    pub async fn add_stream(&self, stream: AppStream) {
+        {
+            let mut st = self.inner.lock().await;
+            if let Some(existing) = st.streams.iter_mut().find(|s| s.node_id == stream.node_id) {
+                *existing = stream.clone();
+            } else {
+                st.streams.push(stream.clone());
+            }
+        }
+        self.emit(Event::StreamAdded { stream });
+    }
+
+    /// Remove an application stream by node id and notify clients.
+    pub async fn remove_stream(&self, node_id: u32) {
+        {
+            let mut st = self.inner.lock().await;
+            st.streams.retain(|s| s.node_id != node_id);
+        }
+        self.emit(Event::StreamRemoved { node_id });
     }
 }

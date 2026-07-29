@@ -100,7 +100,7 @@ fn parse_role(s: &str) -> Result<ChannelRole> {
     })
 }
 
-fn arg<'a>(args: &'a [String], i: usize) -> Result<&'a str> {
+fn arg(args: &[String], i: usize) -> Result<&str> {
     args.get(i)
         .map(String::as_str)
         .with_context(|| format!("missing argument #{i}"))

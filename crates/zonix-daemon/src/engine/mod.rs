@@ -9,6 +9,9 @@
 
 pub mod stub;
 
+#[cfg(feature = "pipewire-backend")]
+pub mod pipewire;
+
 use zonix_core::model::{ChannelRole, Equalizer};
 
 /// Errors the engine may return. Kept small; the IPC layer maps these onto

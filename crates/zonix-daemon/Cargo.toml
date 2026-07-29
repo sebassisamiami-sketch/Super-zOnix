@@ -12,6 +12,14 @@ description = "zOnix always-on audio engine daemon (PipeWire graph manager + IPC
 name = "zonixd"
 path = "src/main.rs"
 
+[features]
+# Default builds use the in-memory stub engine and compile on ANY machine,
+# even without PipeWire headers (handy for CI, the GUI dev loop, and tests).
+default = []
+# The real backend. Requires the `pipewire-devel` system package at build time
+# (see docs/ARCHITECTURE.md). Enable with: cargo build --features pipewire-backend
+pipewire-backend = ["dep:pipewire"]
+
 [dependencies]
 zonix-core = { workspace = true }
 serde = { workspace = true }
@@ -23,9 +31,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 directories = { workspace = true }
 
-# NOTE (Phase 2): the PipeWire integration will add:
-#   pipewire = "0.8"      # libpipewire-0.3 bindings
-#   libspa   = "0.8"
-# These require the `pipewire-devel` system package (see docs/ARCHITECTURE.md).
-# They are intentionally NOT enabled yet so the Phase 1 scaffold builds on any
-# machine without PipeWire headers installed.
+# Real PipeWire bindings (libpipewire-0.3). Optional: only pulled in when the
+# `pipewire-backend` feature is enabled. `pipewire` re-exports `libspa` as
+# `pipewire::spa`, so no separate libspa dependency is needed.
+pipewire = { version = "0.8", optional = true }

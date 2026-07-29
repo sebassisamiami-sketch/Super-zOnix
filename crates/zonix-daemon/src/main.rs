@@ -29,18 +29,17 @@ async fn main() -> Result<()> {
     init_tracing();
     info!(version = env!("CARGO_PKG_VERSION"), "starting zonixd");
 
+    // --- Shared state ----------------------------------------------------------
+    let shared = SharedState::new(SystemState::default());
+
     // --- Build the audio engine ------------------------------------------------
-    // Phase 1: in-memory stub. Phase 2 swaps this for PipeWireEngine::new()? .
-    let engine: Arc<dyn AudioEngine> = Arc::new(StubEngine::new());
+    // With `--features pipewire-backend` we try the real PipeWire engine and
+    // fall back to the in-memory stub if PipeWire is unreachable. Without the
+    // feature, we always use the stub.
+    let engine: Arc<dyn AudioEngine> = build_engine(&shared);
     if let Err(err) = engine.initialize_graph() {
         warn!(%err, "engine graph init failed; continuing in degraded mode");
     }
-
-    // --- Shared state ----------------------------------------------------------
-    let mut initial = SystemState::default();
-    // The stub engine has no real PipeWire connection; mark accordingly.
-    initial.pipewire_connected = false;
-    let shared = SharedState::new(initial);
 
     // --- IPC server ------------------------------------------------------------
     let ctx = Ctx {
@@ -60,6 +59,50 @@ async fn main() -> Result<()> {
     }
     info!("zonixd stopped");
     Ok(())
+}
+
+/// Build the audio engine when the real PipeWire backend is compiled in.
+///
+/// Tries to connect to PipeWire; on success it spawns a task that mirrors
+/// PipeWire updates (streams appearing/leaving, connection status) into the
+/// shared state. On failure it logs and falls back to the stub engine.
+#[cfg(feature = "pipewire-backend")]
+fn build_engine(shared: &SharedState) -> Arc<dyn AudioEngine> {
+    use crate::engine::pipewire::{PipeWireEngine, PwUpdate};
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PwUpdate>();
+    match PipeWireEngine::new(tx) {
+        Ok(engine) => {
+            let shared = shared.clone();
+            tokio::spawn(async move {
+                while let Some(update) = rx.recv().await {
+                    match update {
+                        PwUpdate::Connected(connected) => {
+                            shared.set_pipewire_connected(connected).await
+                        }
+                        PwUpdate::SinkReady { role, node_id } => {
+                            shared.set_sink_node_id(role, node_id).await
+                        }
+                        PwUpdate::StreamAdded(stream) => shared.add_stream(stream).await,
+                        PwUpdate::StreamRemoved(node_id) => shared.remove_stream(node_id).await,
+                    }
+                }
+            });
+            info!("using PipeWire backend");
+            Arc::new(engine)
+        }
+        Err(err) => {
+            warn!(%err, "PipeWire backend unavailable; using stub engine");
+            Arc::new(StubEngine::new())
+        }
+    }
+}
+
+/// Build the audio engine when only the stub backend is available.
+#[cfg(not(feature = "pipewire-backend"))]
+fn build_engine(_shared: &SharedState) -> Arc<dyn AudioEngine> {
+    info!("using stub engine (built without pipewire-backend feature)");
+    Arc::new(StubEngine::new())
 }
 
 /// Initialize `tracing` with `RUST_LOG` support (default: info).

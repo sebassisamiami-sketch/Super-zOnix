@@ -197,30 +197,72 @@ Super-zOnix/
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **1** | Architecture, workspace scaffold, IPC contract, stub engine, daemon+CLI that build & run. | ✅ this PR |
-| 2 | `PipeWireEngine`: create the 4 virtual sinks + mic chain via `libpipewire-0.3`; WirePlumber Lua fallback. | next |
-| 3 | DSP: parametric EQ + RNNoise noise suppression + gate/compressor on the lanes/mic. | |
+| **1** | Architecture, workspace scaffold, IPC contract, stub engine, daemon+CLI that build & run. | ✅ done |
+| **2** | `PipeWireEngine`: create the 4 virtual sinks (loopback config) + native discovery, volume/mute, stream routing. | ✅ done |
+| 3 | DSP: parametric EQ + RNNoise noise suppression + gate/compressor on the lanes/mic. | next |
 | 4 | Tauri + React GUI: per-app faders, EQ graph, mic panel, profile bar. | |
 | 5 | Nobara deployment: `.rpm`/Flatpak, exact build & install steps. | |
+
+### Phase 2 — PipeWire backend (implemented & validated)
+
+The real backend is compiled with `--features pipewire-backend` (requires
+`pipewire-devel` at build time). It was validated end-to-end against a live
+**PipeWire 1.2.7** session:
+
+1. The loopback config drop-in created the four lane sinks
+   (`zonix.sink.{game,chat,media,system}`) — confirmed via `pw-cli ls Node`.
+2. `zonixd` connected, discovered all four sinks and bound a proxy to each
+   (`lane sink ready role=game node_id=40 …`).
+3. `zonixctl volume game 0.40` set the sink's real `channelVolumes` to
+   `[0.40, 0.40]` (confirmed via `pw-cli enum-params zonix.sink.game Props`).
+4. `zonixctl mute chat on` set the real node's `Props:mute` to `true`.
+
+**How it works:** virtual sinks are created declaratively by
+`wireplumber/config/pipewire.conf.d/50-zonix-loopback.conf` (each is a
+`module-loopback` instance = a targetable `Audio/Sink` + a playback stream that
+mixes into the default output). The Rust `PipeWireEngine` runs the PipeWire main
+loop on a dedicated thread, watches the registry to discover the lane sinks and
+application streams, drives per-lane volume/mute by sending a SPA `Props` pod via
+`Node::set_param`, and routes app streams by writing `target.object` into the
+`default` metadata (WirePlumber then re-links them).
+
+**Not yet exercised:** live per-app stream routing was not tested in the
+headless sandbox (no real application streams were present); the code path is in
+place and uses the standard metadata mechanism. EQ (`apply_equalizer`) is a
+no-op until the Phase 3 filter-chain lands.
 
 ---
 
 ## 9. Build & run (Phase 1 scaffold)
 
 ```bash
-# Build everything
+# Stub build — runs anywhere, no PipeWire needed (in-memory engine)
 cargo build
-
-# Run the daemon (uses an in-memory stub engine in Phase 1)
 RUST_LOG=info ./target/debug/zonixd &
-
-# Talk to it
 ./target/debug/zonixctl state
 ./target/debug/zonixctl volume game 0.5
 ./target/debug/zonixctl mute chat on
 ```
 
-> **Sandbox note:** the Phase 1 scaffold builds and runs anywhere because it
-> does not link PipeWire yet. Phase 2 adds the `pipewire` crate, which requires
-> the `pipewire-devel` system package. On Nobara/Fedora:
-> `sudo dnf install pipewire-devel wireplumber clang`.
+### Real PipeWire backend (Phase 2)
+
+```bash
+# One-time: install the build dependency on Nobara/Fedora
+sudo dnf install pipewire-devel wireplumber clang
+
+# Install the virtual-sink config and restart the user audio services
+./scripts/install-config.sh
+
+# Build with the real backend and run the daemon
+cargo build --features pipewire-backend
+RUST_LOG=info ./target/debug/zonixd &
+
+# The four zOnix lanes now exist and are controllable:
+wpctl status | grep -i zonix
+./target/debug/zonixctl volume game 0.4
+./target/debug/zonixctl mute chat on
+```
+
+> **Sandbox note:** the default (stub) build compiles anywhere. The
+> `pipewire-backend` build links `libpipewire-0.3`, so it needs the
+> `pipewire-devel` package at build time.

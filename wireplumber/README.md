@@ -1,21 +1,25 @@
-# WirePlumber integration (Phase 2)
+# PipeWire / WirePlumber integration
 
-This directory holds the WirePlumber Lua scripts and PipeWire config fragments
-that create zOnix's virtual sinks and wire them into the graph.
+This directory holds the PipeWire config fragments that create zOnix's virtual
+sinks and wire them into the graph.
 
-Planned contents:
+## Shipped (Phase 2)
 
 | File | Purpose |
 |------|---------|
-| `scripts/51-zonix-virtual-sinks.lua` | Creates the `zonix.sink.{game,chat,media,system}` null sinks via `node.factory` (`support.null-audio-sink`). |
-| `config/zonix.conf.d/10-zonix.conf` | Drop-in loaded from `~/.config/pipewire/pipewire.conf.d/` that links the mixed output to the default physical sink. |
-| `scripts/52-zonix-mic-chain.lua` | Sets up the microphone capture chain node used by the ClearCast enhancement. |
+| `config/pipewire.conf.d/50-zonix-loopback.conf` | Creates the four lane sinks `zonix.sink.{game,chat,media,system}` using `module-loopback`. Each is a targetable `Audio/Sink` whose audio is mixed into the current default output device. Install it with `scripts/install-config.sh`. |
 
-The daemon (`zonixd`) can either (a) install/refresh these scripts and let
-WirePlumber own the nodes, or (b) create the nodes directly via the PipeWire API
-(`pipewire-rs`). Phase 2 implements the direct-API path in
-`crates/zonix-daemon/src/engine/pipewire.rs`; these Lua scripts are the
-declarative fallback for users who prefer config-file management.
+This is the **audible** creation path: apps route into these sinks, and the
+`zonixd` daemon discovers them by name to control volume/mute and to move
+application streams between lanes over the native PipeWire API.
 
-> Nothing here is loaded yet — Phase 1 ships only the scaffold and the
-> in-memory stub engine.
+Validated against PipeWire 1.2.7: after installing the drop-in, all four sinks
+appear in `pw-cli ls Node` / `wpctl status`, and the daemon binds and controls
+them (see `docs/ARCHITECTURE.md`, "Phase 2").
+
+## Planned
+
+| File | Purpose |
+|------|---------|
+| `config/pipewire.conf.d/51-zonix-mic.conf` | Microphone capture chain feeding the ClearCast enhancement (Phase 3). |
+| `scripts/*.lua` | Optional WirePlumber Lua policy for automatic per-app lane assignment (Phase 3+). |
